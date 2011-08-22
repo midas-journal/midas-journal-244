@@ -1,0 +1,251 @@
+%
+% Complete documentation on the extended LaTeX markup used for Insight
+% documentation is available in ``Documenting Insight'', which is part
+% of the standard documentation for Insight.  It may be found online
+% at:
+%
+%     http://www.itk.org/
+
+\documentclass{InsightArticle}
+
+\usepackage[dvips]{graphicx}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%
+%  hyperref should be the last package to be loaded.
+%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\usepackage[dvips,
+bookmarks,
+bookmarksopen,
+backref,
+colorlinks,linkcolor={blue},citecolor={blue},urlcolor={blue},
+]{hyperref}
+
+
+%  This is a template for Papers to the Insight Journal.
+%  It is comparable to a technical report format.
+
+% The title should be descriptive enough for people to be able to find
+% the relevant document.
+\title{Mutable Priority Queue Container}
+
+% Increment the release number whenever significant changes are made.
+% The author and/or editor can define 'significant' however they like.
+\release{0.1}
+
+% At minimum, give your name and an email address.  You can include a
+% snail-mail address if you like.
+\author{Arnaud Gelas, Alexandre Gouaillard\\
+and Sean Megason}
+\authoraddress{Department of System Biology, Harvard Medical School,\\
+Boston, MA 02115, USA}
+
+\begin{document}
+
+
+\ifpdf
+\else
+   %
+   % Commands for including Graphics when using latex
+   %
+   \DeclareGraphicsExtensions{.eps,.jpg,.gif,.tiff,.bmp,.png}
+   \DeclareGraphicsRule{.jpg}{eps}{.jpg.bb}{`convert #1 eps:-}
+   \DeclareGraphicsRule{.gif}{eps}{.gif.bb}{`convert #1 eps:-}
+   \DeclareGraphicsRule{.tiff}{eps}{.tiff.bb}{`convert #1 eps:-}
+   \DeclareGraphicsRule{.bmp}{eps}{.bmp.bb}{`convert #1 eps:-}
+   \DeclareGraphicsRule{.png}{eps}{.png.bb}{`convert #1 eps:-}
+\fi
+
+
+\maketitle
+
+
+\ifhtml
+\chapter*{Front Matter\label{front}}
+\fi
+
+
+% The abstract should be a paragraph or two long, and describe the
+% scope of the document.
+\begin{abstract}
+When dealing with functional minimization, or maximization, it can sometimes be solved by a greedy algorithm. To implement greedy algorithm one needs priority queue container, i.e. get for a very low cost the lowest or highest element present in a sorted container. Whenever the priority of one element present in the queue needs to be modified, standard implementations, like \code{std::priority\_queue}, can not be applied directly. VTK has is own implementation \code{vtkPriorityQueue} which is not templated and can only be applied for \code{vtkIdType} and for the minimizing the functional. We propose here an implementation of a mutable priority queue container where element, priority, and objective (minimization or maximization) are given by template arguments. Our implementation allows to minimize or maximize a given functional, and any element can be modified, deleted at any time, and with a low cost.
+
+%When dealing with geometry of discrete surfaces, it is often required to have a priority queue of edges with different metric attached (edge length, quadric, curvature, ...). Modification of the mesh can impact the metric on several edges. For example decimation via edge collapse will impact in average 11 edges on a triangular mesh. Flipping an edge and any other unitary Euler operation will impact the neighborhood edges.
+%For those applications, the objects contained in a priority queue need to be updated or even deleted. The STL priority queue API does not propose such feature and is a bottleneck for such applications. VTK has is own implementation: vtkPriorityQueue which is not templated and thus can only be used with vtkIdType. We propose here an implementation of a mutable priority queue container that allows items to be updated and deleted, and also can be templated over the kind of element, priority value, .... .
+\end{abstract}
+
+\tableofcontents
+
+\section{ Implementation}
+\subsection{Priority Queue}
+
+The class \code{itk::PriorityQueueContainer} inherits from \code{itk::VectorContainer} and is templated over for elements
+\begin{verbatim}
+template<
+  typename TElementWrapper,           // the type of wrapper (direct or indirect)
+  typename TElementWrapperInterface,  // the type of queue (min or max)
+  typename TElementPriority = double, // the type of the priority, cost, error...
+  typename TElementIdentifier = int   //  the identifier of the element
+  >
+class PriorityQueueContainer
+\end{verbatim}
+
+\subsection{Wrapper Interface}
+
+\subsubsection{Direct}
+
+If you want the element to be stored in the priority, which will be in charge of their memory (the allocation is thus done in the heap), you can use a direct wrapper.
+
+\begin{verbatim}
+template<
+  typename TElement,          // the element itself
+  typename TElementIdentifier //  the identifier of the element
+  >
+class ElementWrapperInterface
+\end{verbatim}
+
+\subsubsection{Indirect}
+
+If you prefer to keep the element elsewhere you can use the indirect wrapper:
+%If you prefer to keep the element elsewhere (like in the itk::Mesh::CellContainer where the edges are) you can use the indirect wrapper
+
+\begin{verbatim}
+template<
+  typename ElementWrapperPointerType, // pointer to the element
+  typename TElementIdentifier = int   // the identifier of the element
+  >
+class ElementWrapperPointerInterface
+\end{verbatim}
+
+\subsection{Minimization or Maximization}
+
+You can switch from a minimum priority queue to a maximum priority queue by using the right wrapper that internally define the compare function.
+
+\subsubsection{Minimization}
+
+\begin{verbatim}
+template<
+  typename TElement,
+  typename TElementPriority = double,
+  typename TElementIdentifier = int
+ >
+class MinPriorityQueueElementWrapper
+\end{verbatim}
+
+\subsubsection{Maximization}
+\begin{verbatim}
+template<
+  typename TElement,
+  typename TElementPriority = double,
+  typename TElementIdentifier = int
+ >
+class MaxPriorityQueueElementWrapper
+\end{verbatim}
+
+\section{Usage}
+
+Let's consider the problem of maximizing the edge length in a surface mesh, and assume that this can be solved by a greedy algorithm where the shortest edge is collapsed. All edges should be first pushed in the container, and sorted according to their length, from the shortest to the longest. Then after each edge collapse operation, few edges length need to be updated in the container.
+%Let's take the exemple of an edge-collapse based decimation code. The idea is to decimate the mesh starting with the shortest edge. We need to order the edges depending on their length, from shortest to longest:
+
+\subsection{types definition}
+
+\begin{verbatim}
+  // First define the edge length Type
+ typedef MeasureType PriorityType;
+
+ // then define a wrapper for the edge pointer and the endge length for a min ordering
+ typedef itk::MinPriorityQueueElementWrapper<
+    OutputQEType*, // the Edge Type
+    PriorityType   // the edge length type
+    >  PriorityQueueItemType;
+
+ // now we are ready to define the priority Queue container
+ typedef itk::PriorityQueueContainer< PriorityQueueItemType*,
+   ElementWrapperPointerInterface< PriorityQueueItemType* >,
+   PriorityType
+   > PriorityQueueType;
+
+ // now define the pointer type to create the object later
+ typedef PriorityQueueType::Pointer PriorityQueuePointer;
+\end{verbatim}
+
+\subsection{Useful methods}
+
+\begin{verbatim}
+ // initialize the container to no item. Do not release memory
+ void Clear( )
+
+ // Check if empty
+ bool Empty( )
+
+  // insert element in the queue
+ void Push( Element element )
+
+ // look at the first element, equivalent to top()
+ Element Peek( )
+
+ // pop the first element from the queue
+ void Pop( )
+
+ // NEW - update an element already in the Container.
+ void Update( Element element )
+
+ // NEW - delete an element anywhere in the Container.
+ void Delete( Element element )
+\end{verbatim}
+
+\section{Examples}
+
+\subsection{Simple Example}
+
+\begin{verbatim}
+  typedef MinPriorityQueueElementWrapper< int, double, int > PQElementType;
+  typedef PriorityQueueContainer< PQElementType, PQElementType, double, int >
+    PQType;
+  PQType::Pointer priority_queue = PQType::New( );
+
+  vnl_random random( 12 );
+  int i( 0 ), element( 0 );
+  double value = random.drand32( -1000., 1000. );
+
+  PQElementType to_be_erased( i, value );
+  priority_queue->Push( to_be_erased );
+
+  for( i = 1; i < 100; i++ )
+  {
+    value = random.drand32( -1000., 1000. );
+    std::cout <<"{" <<i <<", " <<value <<"}" <<std::endl;
+    priority_queue->Push( PQElementType( i, value ) );
+  }
+
+  i = 0;
+
+  while( !priority_queue->Empty() )
+  {
+    element = priority_queue->Peek( ).m_Element;
+    value = priority_queue->Peek( ).m_Priority;
+    std::cout <<i++ <<" ** element: " <<element <<" priority: " <<value;
+    std::cout <<" ** size: " <<priority_queue->Size( )<<std::endl;
+    priority_queue->Pop( );
+  }
+
+\end{verbatim}
+
+\subsection{Practical Example}
+Will be given in subsequent papers on Decimation and Delaunay conforming.
+
+\section{Acknowledgment}
+This work was funded by a grant from the NHGRI (P50HG004071-02) to found the Center for in toto genomic analysis of vertebrate development.
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%
+%  Insert the bibliography using BibTeX
+%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\bibliographystyle{plain}
+\bibliography{InsightJournal}
+
+
+\end{document}
+
